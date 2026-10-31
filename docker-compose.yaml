@@ -11,3 +11,9 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - ./out/pgdata:/var/lib/postgresql
+    healthcheck:
+      test: 'pg_isready -h 127.0.0.1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
