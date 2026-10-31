@@ -1,3 +1,5 @@
 AGENTS.md
 PLAN.md
 out/
+.env
+.idea/
