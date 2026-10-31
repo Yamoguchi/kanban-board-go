@@ -1,4 +1,4 @@
-.PHONY: help
+.PHONY: help env-up env-down clear-env db-shell
 
 help:
 	@printf '\nKanban Board | Development commands\n\n'
@@ -21,10 +21,10 @@ env-down:
 	@docker compose down postgres
 
 clear-env:
-	@printf 'Delete all PostgresSQL data? [Y/n]'; \
+	@printf 'Delete all PostgreSQL data? [y/N] '; \
 	read -r answer || exit 1; \
 	case "$$answer" in \
-		""|Y|y) docker compose stop postgres && rm -rf -- ./out/pgdata ;; \
+		Y|y) docker compose stop postgres && rm -rf -- ./out/pgdata ;; \
 		*) echo "Cancelled" ;; \
 	esac
 
