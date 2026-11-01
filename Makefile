@@ -1,4 +1,7 @@
-.PHONY: help env-up env-down clear-env db-shell
+include .env
+export
+
+.PHONY: help env-up env-down clear-env db-shell start-http-server
 
 help:
 	@printf '\nKanban Board | Development commands\n\n'
