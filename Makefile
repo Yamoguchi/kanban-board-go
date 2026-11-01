@@ -35,4 +35,4 @@ db-shell:
 	@docker compose exec postgres sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
 
 start-http-server:
-	@go run cmd/api/main.go
+	@go run ./cmd/api/

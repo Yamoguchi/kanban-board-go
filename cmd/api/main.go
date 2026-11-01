@@ -1,29 +1,16 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
-
-	"github.com/kelseyhightower/envconfig"
+	"os/signal"
+	"syscall"
+	"time"
 )
-
-type ServerConfig struct {
-	HTTPAddress string `envconfig:"ADDRESS" default:"127.0.0.1:8080"`
-}
-
-func (cfg *ServerConfig) LoadFromEnv() error {
-	err := envconfig.Process("HTTP", cfg)
-	if err != nil {
-		return err
-	}
-	if cfg.HTTPAddress == "" {
-		return errors.New("HTTP_ADDRESS must not be empty")
-	}
-	return nil
-}
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -31,6 +18,64 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
 		fmt.Println(err)
 	}
+}
+
+func run(cfg ServerConfig, mux *http.ServeMux) error {
+	ctx, stop := signal.NotifyContext(
+		context.Background(),
+		syscall.SIGINT,
+		syscall.SIGTERM,
+	)
+	defer stop()
+
+	server := &http.Server{
+		Addr:              cfg.HTTPAddress,
+		Handler:           mux,
+		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
+		ReadTimeout:       cfg.ReadTimeout,
+		WriteTimeout:      cfg.WriteTimeout,
+		IdleTimeout:       cfg.IdleTimeout,
+	}
+
+	serverErrors := make(chan error, 1)
+
+	go func() {
+		serverErrors <- server.ListenAndServe()
+	}()
+
+	log.Println("Starting HTTP server listening on", cfg.HTTPAddress)
+
+	select {
+	case err := <-serverErrors:
+		if !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("http server error: %w", err)
+		}
+	case <-ctx.Done():
+		log.Println("Shutting down HTTP server")
+		stop()
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(
+		context.Background(),
+		5*time.Second,
+	)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		closeErr := server.Close()
+		return errors.Join(
+			fmt.Errorf("http server shutdown error: %w", err),
+			closeErr,
+		)
+	}
+
+	if err := <-serverErrors; !errors.Is(err, http.ErrServerClosed) {
+		return fmt.Errorf("http server error: %w", err)
+	}
+
+	log.Println("HTTP server shutdown complete")
+	return nil
+
 }
 
 func main() {
@@ -43,11 +88,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", healthHandler)
 
-	log.Println("Listening on", cfg.HTTPAddress)
-
-	if err := http.ListenAndServe(cfg.HTTPAddress, mux); !errors.Is(err, http.ErrServerClosed) {
+	if err := run(cfg, mux); err != nil {
 		log.Fatal(err)
-	} else {
-		fmt.Println("Server was stopped")
 	}
 }
